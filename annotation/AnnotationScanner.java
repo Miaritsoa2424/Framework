@@ -1,53 +1,85 @@
 package annotation;
 
+
+import jakarta.servlet.ServletContext;
 import java.io.File;
-import java.net.URL;
-import java.util.ArrayList;
-import java.util.List;
+import java.lang.reflect.Method;
+import java.util.*;
 
 public class AnnotationScanner {
 
-    public static List<Class<?>> findControllers(String packageName) {
-        List<Class<?>> controllers = new ArrayList<>();
-        try {
-            String path = packageName.replace('.', '/');
-            ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
-            URL resource = classLoader.getResource(path);
+    public static class ScanResult {
+        public final Map<String, Method> urlToMethod = new HashMap<>();
+        public final Set<Class<?>> controllerClasses = new HashSet<>();
+    }
 
-            if (resource == null) {
-                System.err.println("Package introuvable: " + packageName);
-                return controllers;
-            }
+    public static ScanResult scan(ServletContext ctx) {
+        ScanResult result = new ScanResult();
+        String classesPath = ctx.getRealPath("/WEB-INF/classes");
+        if (classesPath == null) return result;
 
-            File directory = new File(resource.toURI());
-            if (!directory.exists()) {
-                return controllers;
-            }
+        File root = new File(classesPath);
+        if (!root.exists()) return result;
 
-            for (File file : directory.listFiles()) {
-                if (file.getName().endsWith(".class")) {
-                    String className = packageName + "." + file.getName().replace(".class", "");
-                    try {
-                        Class<?> clazz = Class.forName(className);
-                        if (clazz.isAnnotationPresent(Controller.class)) {
-                            controllers.add(clazz);
+        ClassLoader loader = Thread.currentThread().getContextClassLoader();
+        scanDir(root, root, loader, result);
+        return result;
+    }
+
+    private static void scanDir(File root, File current, ClassLoader loader, ScanResult result) {
+        for (File file : Objects.requireNonNull(current.listFiles())) {
+            if (file.isDirectory()) {
+                scanDir(root, file, loader, result);
+            } else if (file.getName().endsWith(".class")) {
+                String className = toClassName(root, file);
+                try {
+                    Class<?> clazz = loader.loadClass(className);
+                    if (clazz.isAnnotationPresent(Controller.class)) {
+                        result.controllerClasses.add(clazz);
+
+                        Controller ctrl = clazz.getAnnotation(Controller.class);
+                        String base = ctrl.base();
+
+                        for (Method method : clazz.getDeclaredMethods()) {
+                            if (method.isAnnotationPresent(Route.class)) {
+                                Route route = method.getAnnotation(Route.class);
+                                String fullUrl = normalizeUrl(base + route.url());
+                                result.urlToMethod.put(fullUrl, method);
+                            }
                         }
-                    } catch (ClassNotFoundException e) {
-                        e.printStackTrace();
                     }
+                } catch (ClassNotFoundException e) {
+                    e.printStackTrace();
                 }
             }
-        } catch (Exception e) {
-            e.printStackTrace();
         }
-        return controllers;
     }
 
-    public static void main(String[] args) {
-        List<Class<?>> controllers = findControllers("annotation.controllers"); // ton package
-        for (Class<?> c : controllers) {
-            Controller annotation = c.getAnnotation(Controller.class);
-            System.out.println("Classe: " + c.getName() + ", base=" + annotation.base());
-        }
+    private static String toClassName(File root, File file) {
+        String absPath = file.getAbsolutePath();
+        String rootPath = root.getAbsolutePath();
+        String relative = absPath.substring(rootPath.length() + 1)
+                .replace(File.separatorChar, '.')
+                .replaceAll("\\.class$", "");
+        return relative;
     }
+
+    private static String normalizeUrl(String url) {
+        url = url.replaceAll("//+", "/"); // supprime les doubles /
+        if (!url.startsWith("/")) url = "/" + url;
+        return url;
+    }
+
+    // --- Test ou démonstration ---
+    // public static void printResult(ScanResult result) {
+    //     System.out.println("=== Controllers détectés ===");
+    //     for (Class<?> c : result.controllerClasses) {
+    //         System.out.println("→ " + c.getName());
+    //     }
+
+    //     System.out.println("\n=== Routes mappées ===");
+    //     for (Map.Entry<String, Method> e : result.urlToMethod.entrySet()) {
+    //         System.out.println(e.getKey() + "  →  " + e.getValue().getDeclaringClass().getSimpleName() + "." + e.getValue().getName());
+    //     }
+    // }
 }
