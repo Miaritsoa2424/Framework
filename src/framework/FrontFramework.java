@@ -114,6 +114,12 @@ public class FrontFramework extends HttpServlet {
         
         if (result instanceof ModelView) {
             ModelView modelView = (ModelView) result;
+
+            // Transférer toutes les données du ModelView dans la requête
+            for (Map.Entry<String, Object> entry : modelView.getData().entrySet()) {
+                req.setAttribute(entry.getKey(), entry.getValue());
+            }
+
             String viewPath = modelView.getView();
             RequestDispatcher dispatcher = req.getRequestDispatcher(viewPath);
             dispatcher.forward(req, resp);
