@@ -10,6 +10,7 @@ import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import annotation.AnnotationScanner;
+import view.ModelView;
 
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -74,16 +75,12 @@ public class FrontFramework extends HttpServlet {
         }
     }
 
-    private void customServe(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+    private void customServe(HttpServletRequest req, HttpServletResponse resp) throws IOException, ServletException {
         String path = req.getRequestURI().substring(req.getContextPath().length());
         String httpMethod = req.getMethod();
         
         try {
-            String result = invokeMethod(path, httpMethod);
-            resp.setContentType("text/html; charset=UTF-8");
-            PrintWriter out = resp.getWriter();
-            out.println(result);
-            out.flush();
+            invokeMethod(path, httpMethod, req, resp);
         } catch (Exception e) {
             resp.setContentType("text/html; charset=UTF-8");
             resp.setStatus(HttpServletResponse.SC_NOT_FOUND);
@@ -95,7 +92,7 @@ public class FrontFramework extends HttpServlet {
         }
     }
 
-    private String invokeMethod(String url, String httpMethod) throws Exception {
+    private void invokeMethod(String url, String httpMethod, HttpServletRequest req, HttpServletResponse resp) throws Exception {
         if (scanResult == null || scanResult.urlToMethod.isEmpty()) {
             throw new Exception("Aucune route configurée");
         }
@@ -115,10 +112,18 @@ public class FrontFramework extends HttpServlet {
         
         Object result = method.invoke(controllerInstance);
         
-        if (result instanceof String) {
-            return (String) result;
+        if (result instanceof ModelView) {
+            ModelView modelView = (ModelView) result;
+            String viewPath = modelView.getView();
+            RequestDispatcher dispatcher = req.getRequestDispatcher(viewPath);
+            dispatcher.forward(req, resp);
+        } else if (result instanceof String) {
+            resp.setContentType("text/html; charset=UTF-8");
+            PrintWriter out = resp.getWriter();
+            out.println((String) result);
+            out.flush();
         } else {
-            throw new Exception("La méthode doit retourner un String");
+            throw new Exception("La méthode doit retourner un String ou un ModelView");
         }
     }
 
