@@ -6,7 +6,8 @@ mkdir -p dist
 
 # Compilation des fichiers Java
 echo "Compilation des fichiers Java..."
-javac -d build/classes -cp "lib/*" src/framework/*.java /home/miaritsoa/ITU/Framework/Framework/annotation/*.java
+javac -d build/classes -cp "lib/*" src/framework/*.java /home/miaritsoa/ITU/Framework/Framework/annotation/*.java /home/miaritsoa/ITU/Framework/Framework/view/*.java
+
 
 # Création du fichier JAR
 echo "Création du fichier JAR..."
