@@ -1,7 +1,7 @@
 package annotation;
 
-
 import jakarta.servlet.ServletContext;
+import src.framework.UrlPattern;
 import java.io.File;
 import java.lang.reflect.Method;
 import java.util.*;
@@ -11,6 +11,7 @@ public class AnnotationScanner {
     public static class ScanResult {
         public final Map<String, Method> urlToMethod = new HashMap<>();
         public final Set<Class<?>> controllerClasses = new HashSet<>();
+        public final java.util.List<UrlPattern> urlPatterns = new java.util.ArrayList<>();
     }
 
     public static ScanResult scan(ServletContext ctx) {
@@ -45,6 +46,7 @@ public class AnnotationScanner {
                                 Route route = method.getAnnotation(Route.class);
                                 String fullUrl = normalizeUrl(base + route.url());
                                 result.urlToMethod.put(fullUrl, method);
+                                result.urlPatterns.add(new UrlPattern(fullUrl, method));
                             }
                         }
                     }
