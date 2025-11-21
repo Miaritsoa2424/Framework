@@ -136,25 +136,28 @@ public class FrontFramework extends HttpServlet {
         for (int i = 0; i < parameters.length; i++) {
             Parameter param = parameters[i];
             
+            // Gestion des paramètres URL (@Param)
             if (param.isAnnotationPresent(annotation.Param.class)) {
                 annotation.Param paramAnnotation = param.getAnnotation(annotation.Param.class);
                 String paramName = paramAnnotation.value();
                 String paramValue = urlParams.get(paramName);
                 
-                // Conversion selon le type
-                Class<?> paramType = param.getType();
-                if (paramType == String.class) {
-                    args[i] = paramValue;
-                } else if (paramType == int.class || paramType == Integer.class) {
-                    args[i] = paramValue != null ? Integer.parseInt(paramValue) : 0;
-                } else if (paramType == long.class || paramType == Long.class) {
-                    args[i] = paramValue != null ? Long.parseLong(paramValue) : 0L;
-                } else if (paramType == double.class || paramType == Double.class) {
-                    args[i] = paramValue != null ? Double.parseDouble(paramValue) : 0.0;
-                } else {
-                    args[i] = paramValue;
+                args[i] = convertParameter(paramValue, param.getType());
+            } 
+            // Gestion des paramètres de requête (@RequestParam)
+            else if (param.isAnnotationPresent(annotation.RequestParam.class)) {
+                annotation.RequestParam requestParam = param.getAnnotation(annotation.RequestParam.class);
+                String paramName = requestParam.value();
+                String paramValue = req.getParameter(paramName);
+                
+                // Vérifier si le paramètre est requis
+                if (requestParam.required() && (paramValue == null || paramValue.trim().isEmpty())) {
+                    throw new Exception("Paramètre requis manquant: " + paramName);
                 }
-            } else {
+                
+                args[i] = convertParameter(paramValue, param.getType());
+            } 
+            else {
                 args[i] = null;
             }
         }
@@ -186,6 +189,41 @@ public class FrontFramework extends HttpServlet {
         } else {
             throw new Exception("La méthode doit retourner un String ou un ModelView");
         }
+    }
+    
+    private Object convertParameter(String value, Class<?> targetType) {
+        if (value == null) {
+            return getDefaultValue(targetType);
+        }
+        
+        try {
+            if (targetType == String.class) {
+                return value;
+            } else if (targetType == int.class || targetType == Integer.class) {
+                return value.trim().isEmpty() ? 0 : Integer.parseInt(value);
+            } else if (targetType == long.class || targetType == Long.class) {
+                return value.trim().isEmpty() ? 0L : Long.parseLong(value);
+            } else if (targetType == double.class || targetType == Double.class) {
+                return value.trim().isEmpty() ? 0.0 : Double.parseDouble(value);
+            } else if (targetType == float.class || targetType == Float.class) {
+                return value.trim().isEmpty() ? 0.0f : Float.parseFloat(value);
+            } else if (targetType == boolean.class || targetType == Boolean.class) {
+                return Boolean.parseBoolean(value);
+            } else {
+                return value;
+            }
+        } catch (NumberFormatException e) {
+            throw new RuntimeException("Impossible de convertir '" + value + "' en " + targetType.getSimpleName());
+        }
+    }
+    
+    private Object getDefaultValue(Class<?> type) {
+        if (type == int.class) return 0;
+        if (type == long.class) return 0L;
+        if (type == double.class) return 0.0;
+        if (type == float.class) return 0.0f;
+        if (type == boolean.class) return false;
+        return null;
     }
 
     private void defaultServe(HttpServletRequest req, HttpServletResponse resp)
