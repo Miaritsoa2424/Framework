@@ -136,8 +136,8 @@ public class FrontFramework extends HttpServlet {
         for (int i = 0; i < parameters.length; i++) {
             Parameter param = parameters[i];
             
-            if (param.isAnnotationPresent(annotation.Param.class)) {
-                annotation.Param paramAnnotation = param.getAnnotation(annotation.Param.class);
+            if (param.isAnnotationPresent(annotation.RequestParam.class)) {
+                annotation.RequestParam paramAnnotation = param.getAnnotation(annotation.RequestParam.class);
                 String paramName = paramAnnotation.value();
                 String paramValue = urlParams.get(paramName);
                 
