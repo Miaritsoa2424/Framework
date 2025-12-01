@@ -91,7 +91,7 @@ public class FrontFramework extends HttpServlet {
         
         // 2. Si pas de correspondance exacte, chercher un pattern
         if (method == null) {
-            for (UrlPattern pattern : scanResult.urlPatterns) {
+            for (UrlPatternCheck pattern : scanResult.urlPatterns) {
                 if (pattern.matches(url)) {
                     method = pattern.getMethod();
                     urlParams = pattern.extractParams(url);
