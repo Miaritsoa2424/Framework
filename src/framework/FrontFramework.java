@@ -104,9 +104,9 @@ public class FrontFramework extends HttpServlet {
             throw new Exception("URL non trouvée: " + url);
         }
 
-        Route route = method.getAnnotation(Route.class);
-        if (!route.method().equalsIgnoreCase(httpMethod)) {
-            throw new Exception("Méthode HTTP non autorisée. Attendu: " + route.method() + ", Reçu: " + httpMethod);
+        String expectedHttpMethod = scanResult.methodToHttpMethod.get(method);
+        if (!expectedHttpMethod.equalsIgnoreCase(httpMethod)) {
+            throw new Exception("Méthode HTTP non autorisée. Attendu: " + expectedHttpMethod + ", Reçu: " + httpMethod);
         }
 
         Class<?> controllerClass = method.getDeclaringClass();
