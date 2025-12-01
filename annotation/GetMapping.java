@@ -7,6 +7,6 @@ import java.lang.annotation.ElementType;
 
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.METHOD)
-public @interface Route {
-    String url();
+public @interface GetMapping {
+    String value();
 }

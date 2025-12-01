@@ -13,6 +13,7 @@ public class AnnotationScanner {
         public final Map<String, Method> urlToMethod = new HashMap<>();
         public final Set<Class<?>> controllerClasses = new HashSet<>();
         public final java.util.List<UrlPatternCheck> urlPatterns = new java.util.ArrayList<>();
+        public final Map<Method, String> methodToHttpMethod = new HashMap<>();
     }
 
     public static ScanResult scan(ServletContext ctx) {
@@ -43,11 +44,27 @@ public class AnnotationScanner {
                         String base = ctrl.base();
 
                         for (Method method : clazz.getDeclaredMethods()) {
+                            String fullUrl = null;
+                            String httpMethod = null;
+                            
                             if (method.isAnnotationPresent(Route.class)) {
                                 Route route = method.getAnnotation(Route.class);
-                                String fullUrl = normalizeUrl(base + route.url());
+                                fullUrl = normalizeUrl(base + route.url());
+                                httpMethod = "GET"; // Par défaut
+                            } else if (method.isAnnotationPresent(GetMapping.class)) {
+                                GetMapping mapping = method.getAnnotation(GetMapping.class);
+                                fullUrl = normalizeUrl(base + mapping.value());
+                                httpMethod = "GET";
+                            } else if (method.isAnnotationPresent(PostMapping.class)) {
+                                PostMapping mapping = method.getAnnotation(PostMapping.class);
+                                fullUrl = normalizeUrl(base + mapping.value());
+                                httpMethod = "POST";
+                            }
+                            
+                            if (fullUrl != null) {
                                 result.urlToMethod.put(fullUrl, method);
                                 result.urlPatterns.add(new UrlPatternCheck(fullUrl, method));
+                                result.methodToHttpMethod.put(method, httpMethod);
                             }
                         }
                     }
