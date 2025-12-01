@@ -38,7 +38,7 @@ public class FrontFramework extends HttpServlet {
             Controller ctrl = c.getAnnotation(Controller.class);
             System.out.println("Contrôleur: " + c.getName() + " | base=" + ctrl.base());
         }
-        for (UrlPattern pattern : scanResult.urlPatterns) {
+        for (UrlPatternCheck pattern : scanResult.urlPatterns) {
             Method m = pattern.getMethod();
             Route route = m.getAnnotation(Route.class);
             System.out.println("→ Pattern: " + pattern.getPattern() +
@@ -108,7 +108,7 @@ public class FrontFramework extends HttpServlet {
         
         // 2. Si pas de correspondance exacte, chercher un pattern
         if (method == null) {
-            for (UrlPattern pattern : scanResult.urlPatterns) {
+            for (UrlPatternCheck pattern : scanResult.urlPatterns) {
                 if (pattern.matches(url)) {
                     method = pattern.getMethod();
                     urlParams = pattern.extractParams(url);

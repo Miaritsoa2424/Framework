@@ -6,13 +6,13 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class UrlPattern {
+public class UrlPatternCheck {
     private String pattern;
     private Method method;
     private Pattern regex;
     private java.util.List<String> paramNames;
 
-    public UrlPattern(String pattern, Method method) {
+    public UrlPatternCheck(String pattern, Method method) {
         this.pattern = pattern;
         this.method = method;
         this.paramNames = new java.util.ArrayList<>();
