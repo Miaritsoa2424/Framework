@@ -28,22 +28,6 @@ public class FrontFramework extends HttpServlet {
         ServletContext ctx = getServletContext();
         scanResult = AnnotationScanner.scan(ctx);
         ctx.setAttribute("scanResult", scanResult);
-
-        // --- Affichage console (au démarrage) ---
-        System.out.println("=== Initialisation du FrontFramework ===");
-        for (Class<?> c : scanResult.controllerClasses) {
-            Controller ctrl = c.getAnnotation(Controller.class);
-            System.out.println("Contrôleur: " + c.getName() + " | base=" + ctrl.base());
-        }
-        for (Map.Entry<String, Method> entry : scanResult.urlToMethod.entrySet()) {
-            Method m = entry.getValue();
-            Route route = m.getAnnotation(Route.class);
-            System.out.println("→ URL: " + entry.getKey() +
-                    " | Classe: " + m.getDeclaringClass().getSimpleName() +
-                    " | Méthode: " + m.getName() +
-                    " | HTTP: " + route.method());
-        }
-        System.out.println("=========================================");
     }
 
     @Override
