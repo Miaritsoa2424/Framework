@@ -118,14 +118,46 @@ public class FrontFramework extends HttpServlet {
         
         for (int i = 0; i < parameters.length; i++) {
             Parameter param = parameters[i];
+            Class<?> paramType = param.getType();
             
-            if (param.isAnnotationPresent(annotation.RequestParam.class)) {
+            // Si le paramètre est un Map<String, Object>
+            if (paramType == Map.class) {
+                Map<String, Object> paramMap = new HashMap<>();
+                
+                // Récupérer tous les paramètres de la requête HTTP
+                Map<String, String[]> requestParams = req.getParameterMap();
+                for (Map.Entry<String, String[]> entry : requestParams.entrySet()) {
+                    String key = entry.getKey();
+                    String[] values = entry.getValue();
+                    
+                    // Si un seul value, on met directement le String
+                    // Sinon on met le tableau
+                    if (values.length == 1) {
+                        paramMap.put(key, values[0]);
+                    } else {
+                        paramMap.put(key, values);
+                    }
+                }
+                
+                // Ajouter aussi les paramètres extraits de l'URL
+                for (Map.Entry<String, String> entry : urlParams.entrySet()) {
+                    paramMap.put(entry.getKey(), entry.getValue());
+                }
+                
+                args[i] = paramMap;
+            }
+            // Si le paramètre a l'annotation @RequestParam (ancienne méthode)
+            else if (param.isAnnotationPresent(annotation.RequestParam.class)) {
                 annotation.RequestParam paramAnnotation = param.getAnnotation(annotation.RequestParam.class);
                 String paramName = paramAnnotation.value();
                 String paramValue = urlParams.get(paramName);
                 
+                // Si pas dans l'URL, chercher dans les paramètres de la requête
+                if (paramValue == null) {
+                    paramValue = req.getParameter(paramName);
+                }
+                
                 // Conversion selon le type
-                Class<?> paramType = param.getType();
                 if (paramType == String.class) {
                     args[i] = paramValue;
                 } else if (paramType == int.class || paramType == Integer.class) {
