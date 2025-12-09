@@ -14,6 +14,7 @@ public class AnnotationScanner {
         public final Set<Class<?>> controllerClasses = new HashSet<>();
         public final java.util.List<UrlPatternCheck> urlPatterns = new java.util.ArrayList<>();
         public final Map<Method, String> methodToHttpMethod = new HashMap<>();
+        public final Map<Class<?>, Boolean> restControllers = new HashMap<>();
     }
 
     public static ScanResult scan(ServletContext ctx) {
@@ -66,6 +67,11 @@ public class AnnotationScanner {
                                 result.urlPatterns.add(new UrlPatternCheck(fullUrl, method));
                                 result.methodToHttpMethod.put(method, httpMethod);
                             }
+                        }
+                        
+                        // Vérifier si la classe est annotée avec @RestController
+                        if (clazz.isAnnotationPresent(RestController.class)) {
+                            result.restControllers.put(clazz, true);
                         }
                     }
                 } catch (ClassNotFoundException e) {
