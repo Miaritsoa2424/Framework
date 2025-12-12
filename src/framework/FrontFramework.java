@@ -13,6 +13,7 @@ import view.RestResponse;
 
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.rmi.ServerException;
@@ -196,20 +197,10 @@ public class FrontFramework extends HttpServlet {
                 }
                 
                 // Conversion selon le type
-                if (paramType == String.class) {
-                    args[i] = paramValue;
-                } else if (paramType == int.class || paramType == Integer.class) {
-                    args[i] = paramValue != null ? Integer.parseInt(paramValue) : 0;
-                } else if (paramType == long.class || paramType == Long.class) {
-                    args[i] = paramValue != null ? Long.parseLong(paramValue) : 0L;
-                } else if (paramType == double.class || paramType == Double.class) {
-                    args[i] = paramValue != null ? Double.parseDouble(paramValue) : 0.0;
-                } else {
-                    args[i] = paramValue;
-                }
-            } 
-            // Si le paramètre n'a pas d'annotation, utiliser le nom du paramètre
-            else if (param.isNamePresent()) {
+                args[i] = convertValue(paramValue, paramType);
+            }
+            // Si le paramètre est un type primitif ou wrapper ou String
+            else if (isPrimitiveOrWrapper(paramType) && param.isNamePresent()) {
                 String paramName = param.getName();
                 String paramValue = null;
                 
@@ -223,21 +214,11 @@ public class FrontFramework extends HttpServlet {
                 }
                 
                 // Conversion selon le type
-                if (paramType == String.class) {
-                    args[i] = paramValue;
-                } else if (paramType == int.class || paramType == Integer.class) {
-                    args[i] = paramValue != null ? Integer.parseInt(paramValue) : 0;
-                } else if (paramType == long.class || paramType == Long.class) {
-                    args[i] = paramValue != null ? Long.parseLong(paramValue) : 0L;
-                } else if (paramType == double.class || paramType == Double.class) {
-                    args[i] = paramValue != null ? Double.parseDouble(paramValue) : 0.0;
-                } else if (paramType == boolean.class || paramType == Boolean.class) {
-                    args[i] = paramValue != null ? Boolean.parseBoolean(paramValue) : false;
-                } else {
-                    args[i] = paramValue;
-                }
-            } else {
-                args[i] = null;
+                args[i] = convertValue(paramValue, paramType);
+            }
+            // Si le paramètre est un objet personnalisé
+            else {
+                args[i] = createObjectFromRequest(paramType, req, urlParams);
             }
         }
         
@@ -297,6 +278,96 @@ public class FrontFramework extends HttpServlet {
         } else {
             throw new Exception("La méthode doit retourner un String ou un ModelView");
         }
+    }
+
+    /**
+     * Vérifie si un type est primitif, wrapper ou String
+     */
+    private boolean isPrimitiveOrWrapper(Class<?> type) {
+        return type.isPrimitive() 
+            || type == String.class 
+            || type == Integer.class 
+            || type == Long.class 
+            || type == Double.class 
+            || type == Float.class 
+            || type == Boolean.class 
+            || type == Character.class 
+            || type == Byte.class 
+            || type == Short.class;
+    }
+
+    /**
+     * Convertit une valeur String vers le type cible
+     */
+    private Object convertValue(String value, Class<?> targetType) {
+        if (value == null) {
+            if (targetType.isPrimitive()) {
+                if (targetType == int.class) return 0;
+                if (targetType == long.class) return 0L;
+                if (targetType == double.class) return 0.0;
+                if (targetType == float.class) return 0.0f;
+                if (targetType == boolean.class) return false;
+                if (targetType == char.class) return '\0';
+                if (targetType == byte.class) return (byte) 0;
+                if (targetType == short.class) return (short) 0;
+            }
+            return null;
+        }
+
+        if (targetType == String.class) {
+            return value;
+        } else if (targetType == int.class || targetType == Integer.class) {
+            return Integer.parseInt(value);
+        } else if (targetType == long.class || targetType == Long.class) {
+            return Long.parseLong(value);
+        } else if (targetType == double.class || targetType == Double.class) {
+            return Double.parseDouble(value);
+        } else if (targetType == float.class || targetType == Float.class) {
+            return Float.parseFloat(value);
+        } else if (targetType == boolean.class || targetType == Boolean.class) {
+            return Boolean.parseBoolean(value);
+        } else if (targetType == char.class || targetType == Character.class) {
+            return value.charAt(0);
+        } else if (targetType == byte.class || targetType == Byte.class) {
+            return Byte.parseByte(value);
+        } else if (targetType == short.class || targetType == Short.class) {
+            return Short.parseShort(value);
+        }
+        return value;
+    }
+
+    /**
+     * Crée un objet à partir des paramètres de la requête
+     */
+    private Object createObjectFromRequest(Class<?> objectType, HttpServletRequest req, Map<String, Object> urlParams) throws Exception {
+        // Créer une nouvelle instance de l'objet
+        Object instance = objectType.getDeclaredConstructor().newInstance();
+        
+        // Récupérer tous les champs de la classe
+        Field[] fields = objectType.getDeclaredFields();
+        
+        for (Field field : fields) {
+            field.setAccessible(true);
+            String fieldName = field.getName();
+            Class<?> fieldType = field.getType();
+            
+            // Chercher la valeur dans les paramètres de la requête
+            String paramValue = req.getParameter(fieldName);
+            
+            // Si pas trouvé dans la requête, chercher dans les paramètres URL
+            if (paramValue == null && urlParams.containsKey(fieldName)) {
+                Object urlValue = urlParams.get(fieldName);
+                paramValue = urlValue != null ? urlValue.toString() : null;
+            }
+            
+            // Si on a trouvé une valeur, la convertir et l'assigner
+            if (paramValue != null) {
+                Object convertedValue = convertValue(paramValue, fieldType);
+                field.set(instance, convertedValue);
+            }
+        }
+        
+        return instance;
     }
 
     private void defaultServe(HttpServletRequest req, HttpServletResponse resp)
