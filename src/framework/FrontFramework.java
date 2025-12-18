@@ -3,13 +3,16 @@ package src.framework;
 import jakarta.servlet.RequestDispatcher;
 import jakarta.servlet.ServletContext;
 import jakarta.servlet.ServletException;
+import jakarta.servlet.annotation.MultipartConfig;
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.Part;
 import annotation.AnnotationScanner;
 import view.ModelView;
 import view.RestResponse;
+import view.FileUpload;
 
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -19,8 +22,12 @@ import java.lang.reflect.Parameter;
 import java.rmi.ServerException;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.Collection;
+import java.util.ArrayList;
+import java.util.List;
 
 @WebServlet(name = "FrontFramework", urlPatterns = { "/" }, loadOnStartup = 1)
+@MultipartConfig
 public class FrontFramework extends HttpServlet {
 
     private AnnotationScanner.ScanResult scanResult;
@@ -147,6 +154,32 @@ public class FrontFramework extends HttpServlet {
         // Vérifier si c'est un RestController
         boolean isRestController = scanResult.restControllers.getOrDefault(controllerClass, false);
         
+        // Gérer les fichiers uploadés
+        Map<String, List<FileUpload>> uploadedFiles = new HashMap<>();
+        Map<String, FileUpload> singleFiles = new HashMap<>();
+        
+        try {
+            Collection<Part> parts = req.getParts();
+            for (Part part : parts) {
+                String fieldName = part.getName();
+                // Vérifier si c'est un fichier (a un filename)
+                String fileName = getFileName(part);
+                if (fileName != null && !fileName.isEmpty()) {
+                    FileUpload fileUpload = new FileUpload(part);
+                    
+                    // Ajouter à la liste des fichiers multiples
+                    uploadedFiles.computeIfAbsent(fieldName, k -> new ArrayList<>()).add(fileUpload);
+                    
+                    // Garder aussi le premier fichier pour accès direct
+                    if (!singleFiles.containsKey(fieldName)) {
+                        singleFiles.put(fieldName, fileUpload);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            // Si la requête n'est pas multipart, continuer normalement
+        }
+        
         // Préparer les arguments de la méthode
         Parameter[] parameters = method.getParameters();
         Object[] args = new Object[parameters.length];
@@ -179,7 +212,55 @@ public class FrontFramework extends HttpServlet {
                     paramMap.put(entry.getKey(), entry.getValue());
                 }
                 
+                // Ajouter les fichiers uploadés au Map
+                for (Map.Entry<String, List<FileUpload>> entry : uploadedFiles.entrySet()) {
+                    List<FileUpload> files = entry.getValue();
+                    if (files.size() == 1) {
+                        paramMap.put(entry.getKey(), files.get(0));
+                    } else {
+                        paramMap.put(entry.getKey(), files);
+                    }
+                }
+                
                 args[i] = paramMap;
+            }
+            // Si le paramètre attend un FileUpload ou Part
+            else if (paramType == FileUpload.class || paramType == Part.class) {
+                String paramName = null;
+                
+                if (param.isAnnotationPresent(annotation.RequestParam.class)) {
+                    annotation.RequestParam paramAnnotation = param.getAnnotation(annotation.RequestParam.class);
+                    paramName = paramAnnotation.value();
+                } else if (param.isNamePresent()) {
+                    paramName = param.getName();
+                }
+                
+                if (paramName != null && singleFiles.containsKey(paramName)) {
+                    if (paramType == FileUpload.class) {
+                        args[i] = singleFiles.get(paramName);
+                    } else {
+                        args[i] = singleFiles.get(paramName).getPart();
+                    }
+                } else {
+                    args[i] = null;
+                }
+            }
+            // Si le paramètre attend une List<FileUpload> ou List<Part>
+            else if (paramType == List.class) {
+                String paramName = null;
+                
+                if (param.isAnnotationPresent(annotation.RequestParam.class)) {
+                    annotation.RequestParam paramAnnotation = param.getAnnotation(annotation.RequestParam.class);
+                    paramName = paramAnnotation.value();
+                } else if (param.isNamePresent()) {
+                    paramName = param.getName();
+                }
+                
+                if (paramName != null && uploadedFiles.containsKey(paramName)) {
+                    args[i] = uploadedFiles.get(paramName);
+                } else {
+                    args[i] = new ArrayList<>();
+                }
             }
             // Si le paramètre a l'annotation @RequestParam
             else if (param.isAnnotationPresent(annotation.RequestParam.class)) {
@@ -368,6 +449,21 @@ public class FrontFramework extends HttpServlet {
         }
         
         return instance;
+    }
+
+    /**
+     * Extrait le nom du fichier depuis un Part
+     */
+    private String getFileName(Part part) {
+        String contentDisposition = part.getHeader("content-disposition");
+        if (contentDisposition == null) return null;
+        
+        for (String token : contentDisposition.split(";")) {
+            if (token.trim().startsWith("filename")) {
+                return token.substring(token.indexOf('=') + 1).trim().replace("\"", "");
+            }
+        }
+        return null;
     }
 
     private void defaultServe(HttpServletRequest req, HttpServletResponse resp)
