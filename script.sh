@@ -21,4 +21,20 @@ cp dist/* /home/miaritsoa/ITU/s5/Framework/projetTest/lib
 echo "Nettoyage des fichiers temporaires..."
 rm -rf build
 
+echo "Coying JAR to BO-Location build-file directory..."
+cp dist/Framework.jar /home/miaritsoa/ITU/s5/Voiture/BO-Location/build-file/
+
+cp dist/Framework.jar /home/miaritsoa/ITU/s5/Framework/projetTest/lib
+
+# Installation dans le repository Maven local
+echo "Installation dans le repository Maven local..."
+mvn install:install-file \
+    -Dfile=dist/Framework.jar \
+    -DgroupId=com.miaritsoa.framework \
+    -DartifactId=core \
+    -Dversion=1.0.0 \
+    -Dpackaging=jar
+
 echo "Build terminé. Le fichier JAR se trouve dans le dossier 'dist'"
+
+

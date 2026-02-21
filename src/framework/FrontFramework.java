@@ -10,9 +10,12 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.Part;
 import annotation.AnnotationScanner;
+import annotation.SessionParam;
+import annotation.Session;
 import view.ModelView;
 import view.RestResponse;
 import view.FileUpload;
+import view.CustomSession;
 
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -25,6 +28,8 @@ import java.util.HashMap;
 import java.util.Collection;
 import java.util.ArrayList;
 import java.util.List;
+
+import jakarta.servlet.http.HttpSession;
 
 @WebServlet(name = "FrontFramework", urlPatterns = { "/" }, loadOnStartup = 1)
 @MultipartConfig
@@ -154,6 +159,13 @@ public class FrontFramework extends HttpServlet {
         // Vérifier si c'est un RestController
         boolean isRestController = scanResult.restControllers.getOrDefault(controllerClass, false);
         
+        // Créer la session personnalisée à partir de la session HTTP
+        HttpSession httpSession = req.getSession(true);
+        CustomSession customSession = new CustomSession(httpSession);
+        
+        // Injecter les valeurs de session dans les champs annotés @Session
+        injectSessionFields(controllerInstance, httpSession);
+        
         // Gérer les fichiers uploadés
         Map<String, List<FileUpload>> uploadedFiles = new HashMap<>();
         Map<String, FileUpload> singleFiles = new HashMap<>();
@@ -188,8 +200,25 @@ public class FrontFramework extends HttpServlet {
             Parameter param = parameters[i];
             Class<?> paramType = param.getType();
             
+            // Si le paramètre est un CustomSession
+            if (paramType == CustomSession.class) {
+                args[i] = customSession;
+            }
+            // Si le paramètre a l'annotation @SessionParam
+            else if (param.isAnnotationPresent(SessionParam.class)) {
+                SessionParam sessionAnnotation = param.getAnnotation(SessionParam.class);
+                String sessionKey = sessionAnnotation.value();
+                Object sessionValue = httpSession.getAttribute(sessionKey);
+                
+                // Convertir la valeur de session selon le type attendu
+                if (sessionValue != null) {
+                    args[i] = convertSessionValue(sessionValue, paramType);
+                } else {
+                    args[i] = getDefaultValue(paramType);
+                }
+            }
             // Si le paramètre est un Map<String, Object>
-            if (paramType == Map.class) {
+            else if (paramType == Map.class) {
                 Map<String, Object> paramMap = new HashMap<>();
                 
                 // Récupérer tous les paramètres de la requête HTTP
@@ -305,12 +334,131 @@ public class FrontFramework extends HttpServlet {
         
         Object result = method.invoke(controllerInstance, args);
         
+        // Sauvegarder les champs @Session modifiés dans la session HTTP
+        saveSessionFields(controllerInstance, httpSession);
+        
         // Si c'est un RestController, encapsuler dans RestResponse
         if (isRestController) {
             handleRestResponse(result, resp);
         } else {
             handleNormalResponse(result, req, resp);
         }
+    }
+    
+    /**
+     * Injecte les valeurs de session dans les champs annotés @Session du controller
+     */
+    private void injectSessionFields(Object controller, HttpSession session) throws Exception {
+        Class<?> controllerClass = controller.getClass();
+        Field[] fields = controllerClass.getDeclaredFields();
+        
+        for (Field field : fields) {
+            if (field.isAnnotationPresent(Session.class)) {
+                field.setAccessible(true);
+                Session sessionAnnotation = field.getAnnotation(Session.class);
+                
+                // Utiliser le nom de l'annotation ou le nom du champ
+                String sessionKey = sessionAnnotation.value();
+                if (sessionKey == null || sessionKey.isEmpty()) {
+                    sessionKey = field.getName();
+                }
+                
+                // Récupérer la valeur de la session
+                Object sessionValue = session.getAttribute(sessionKey);
+                if (sessionValue != null) {
+                    // Convertir et injecter la valeur
+                    Object convertedValue = convertSessionValue(sessionValue, field.getType());
+                    field.set(controller, convertedValue);
+                }
+            }
+        }
+    }
+    
+    /**
+     * Sauvegarde les champs annotés @Session du controller dans la session HTTP
+     */
+    private void saveSessionFields(Object controller, HttpSession session) throws Exception {
+        Class<?> controllerClass = controller.getClass();
+        Field[] fields = controllerClass.getDeclaredFields();
+        
+        for (Field field : fields) {
+            if (field.isAnnotationPresent(Session.class)) {
+                field.setAccessible(true);
+                Session sessionAnnotation = field.getAnnotation(Session.class);
+                
+                // Utiliser le nom de l'annotation ou le nom du champ
+                String sessionKey = sessionAnnotation.value();
+                if (sessionKey == null || sessionKey.isEmpty()) {
+                    sessionKey = field.getName();
+                }
+                
+                // Récupérer la valeur du champ
+                Object fieldValue = field.get(controller);
+                
+                // Sauvegarder dans la session (null supprime l'attribut)
+                if (fieldValue != null) {
+                    session.setAttribute(sessionKey, fieldValue);
+                } else {
+                    session.removeAttribute(sessionKey);
+                }
+            }
+        }
+    }
+    
+    /**
+     * Convertit une valeur de session vers le type cible
+     */
+    private Object convertSessionValue(Object value, Class<?> targetType) {
+        if (value == null) {
+            return getDefaultValue(targetType);
+        }
+        
+        // Si le type correspond déjà, retourner directement
+        if (targetType.isInstance(value)) {
+            return value;
+        }
+        
+        // Convertir depuis String si nécessaire
+        if (value instanceof String) {
+            return convertValue((String) value, targetType);
+        }
+        
+        // Conversions numériques
+        if (value instanceof Number) {
+            Number num = (Number) value;
+            if (targetType == int.class || targetType == Integer.class) {
+                return num.intValue();
+            } else if (targetType == long.class || targetType == Long.class) {
+                return num.longValue();
+            } else if (targetType == double.class || targetType == Double.class) {
+                return num.doubleValue();
+            } else if (targetType == float.class || targetType == Float.class) {
+                return num.floatValue();
+            } else if (targetType == short.class || targetType == Short.class) {
+                return num.shortValue();
+            } else if (targetType == byte.class || targetType == Byte.class) {
+                return num.byteValue();
+            }
+        }
+        
+        return value;
+    }
+    
+    /**
+     * Retourne la valeur par défaut pour un type
+     */
+    private Object getDefaultValue(Class<?> type) {
+        if (type.isPrimitive()) {
+            if (type == int.class) return 0;
+            if (type == long.class) return 0L;
+            if (type == double.class) return 0.0;
+            if (type == float.class) return 0.0f;
+            if (type == boolean.class) return false;
+            if (type == char.class) return '\0';
+            if (type == byte.class) return (byte) 0;
+            if (type == short.class) return (short) 0;
+        }
+        return null;
     }
     
     private void handleRestResponse(Object result, HttpServletResponse resp) throws IOException {
@@ -336,6 +484,21 @@ public class FrontFramework extends HttpServlet {
             throws Exception, IOException, ServletException {
         if (result instanceof ModelView) {
             ModelView modelView = (ModelView) result;
+            
+            // Appliquer les modifications de session depuis le ModelView
+            if (modelView.hasSessionChanges()) {
+                HttpSession session = req.getSession(true);
+                
+                // Supprimer les variables de session marquées pour suppression
+                for (String key : modelView.getSessionToRemove().keySet()) {
+                    session.removeAttribute(key);
+                }
+                
+                // Ajouter les nouvelles variables de session
+                for (Map.Entry<String, Object> entry : modelView.getSessionToAdd().entrySet()) {
+                    session.setAttribute(entry.getKey(), entry.getValue());
+                }
+            }
 
             // Transférer toutes les données du ModelView dans la requête
             for (Map.Entry<String, Object> entry : modelView.getData().entrySet()) {
