@@ -153,6 +153,11 @@ public class FrontFramework extends HttpServlet {
             throw new Exception("Méthode HTTP non autorisée. Attendu: " + expectedHttpMethod + ", Reçu: " + httpMethod);
         }
 
+        // Vérification d'autorisation
+        if (!AuthManager.isAuthorized(method, req)) {
+            throw new Exception("Accès non autorisé. Authentification ou rôle insuffisant.");
+        }
+
         Class<?> controllerClass = method.getDeclaringClass();
         Object controllerInstance = controllerClass.getDeclaredConstructor().newInstance();
         

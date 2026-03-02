@@ -1,0 +1,67 @@
+Je veux ajouter une gestion d'autorisation dans mon framework
+On doit ajouter deux annotations:Authorized et Role
+
+CReer une classe : method boolean isAuthorized(MEthod method,HttpServletRequest request)
+Exemplwe d'utilisation des annotations et de la méthode isAuthorized :mport annotation.Authorized;
+import annotation.Role;
+import jakarta.servlet.http.HttpServletRequest;
+import java.lang.reflect.Method;
+
+public class AuthManager {
+    private static final String AUTH_VAR = PropertiesUtil.get("auth.variable");
+    private static final String ROLE_VAR = PropertiesUtil.get("role.variable");
+
+    public static boolean isAuthorized(Method method, HttpServletRequest req) {
+        // Vérification @Authorized : l'utilisateur doit être authentifié
+        if (method.isAnnotationPresent(Authorized.class)) {
+            Object authValue = req.getSession().getAttribute(AUTH_VAR);
+            if (authValue == null) {
+                return false;  // Non authentifié
+            }
+        }
+
+        // Vérification @Role : l'utilisateur doit être authentifié ET avoir le rôle requis
+        if (method.isAnnotationPresent(Role.class)) {
+            // D'abord, vérifier l'authentification (nécessaire pour les rôles)
+            Object authValue = req.getSession().getAttribute(AUTH_VAR);
+            if (authValue == null) {
+                return false;  // Non authentifié, donc pas de rôle possible
+            }
+
+            Role roleAnnotation = method.getAnnotation(Role.class);
+            String requiredRole = roleAnnotation.value();
+            Object sessionRole = req.getSession().getAttribute(ROLE_VAR);
+            if (sessionRole == null || !requiredRole.equals(sessionRole.toString())) {
+                return false;  // Rôle insuffisant
+            }
+        }
+
+        return true;  // Autorisé
+    }
+}
+
+On doit lire depuis application.properties les rôles et les utilisateurs associés 
+VOici un exemple de ce que pourrait être le contenu de votre fichier application.properties :
+import java.io.InputStream;
+import java.util.Properties;
+
+public class PropertiesUtil {
+    private static final Properties props = new Properties();
+
+    static {
+        try (InputStream is = PropertiesUtil.class.getClassLoader().getResourceAsStream("application.properties")) {
+            if (is != null) {
+                props.load(is);
+            } else {
+                // Log ou gestion d'erreur si le fichier n'existe pas
+                System.err.println("application.properties non trouvé dans le classpath.");
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static String get(String key) {
+        return props.getProperty(key);
+    }
+}
